@@ -1,0 +1,52 @@
+name: Auto Vercel Trigger (Safe Loop)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-trigger
+  cancel-in-progress: true  # ensures only one workflow runs at once
+
+jobs:
+  vercel-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6 hours max runtime
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Create trigger file
+        id: makefile
+        run: |
+          FILENAME="trigger_$(date +%s).txt"
+          echo "Triggered at $(date)" > "$FILENAME"
+          echo "file=$FILENAME" >> $GITHUB_OUTPUT
+          git add "$FILENAME"
+          git commit -m "Auto trigger at $(date)" || echo "No changes to commit"
+          git push || echo "Push failed"
+          echo "✅ Created file: $FILENAME"
+
+      - name: Sleep 5 hours (18000 seconds)
+        run: |
+          echo "😴 Sleeping for 5 hours..."
+          sleep 18000
+          echo "🕒 Sleep complete."
+
+      - name: Delete same trigger file
+        run: |
+          git pull
+          git rm -f "${{ steps.makefile.outputs.file }}" || echo "No file found"
+          git commit -m "Cleanup after trigger at $(date)" || echo "No cleanup commit"
+          git push || echo "Push failed"
+          echo "✅ Deleted file: ${{ steps.makefile.outputs.file }}"
